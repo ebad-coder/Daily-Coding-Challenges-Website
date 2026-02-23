@@ -28,6 +28,10 @@ export default function ChallengeWorkspace() {
 
   async function loadDailyChallenge() {
     try {
+      if (!supabase) {
+        return;
+      }
+
       const { data, error } = await supabase
         .from('challenges')
         .select('*')
