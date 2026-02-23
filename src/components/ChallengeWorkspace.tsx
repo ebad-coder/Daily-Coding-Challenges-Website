@@ -47,31 +47,75 @@ export default function ChallengeWorkspace() {
     }
   }
 
+  // NEW: The Piston API Execution Function
+  async function executeCode(userCode: string, testCaseInput: string, currentLang: Language) {
+    const url = 'https://emkc.org/api/v2/piston/execute';
+    const langName = currentLang === 'cpp' ? 'c++' : 'python';
+    
+    const options = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: langName,
+        version: '*',
+        files: [{ content: userCode }],
+        stdin: testCaseInput
+      })
+    };
+  
+    try {
+      const response = await fetch(url, options);
+      const result = await response.json();
+      
+      if (result.run && result.run.code === 0) {
+          return { success: true, output: result.run.stdout };
+      } else {
+          const errorMessage = result.compile?.stderr || result.run?.stderr || 'Unknown execution error';
+          return { success: false, error: errorMessage };
+      }
+    } catch (error) {
+      console.error("Failed to reach the Piston engine:", error);
+      return { success: false, error: "Execution server offline" };
+    }
+  }
+
+  // UPDATED: Now uses the real Piston API instead of random fake results
   async function handleRunCode() {
     if (!challenge) return;
 
     setIsRunning(true);
     setShowTerminal(true);
-    setTerminalOutput(['Compiling...']);
+    
+    let outputs = ['Sending code to Piston compiler...\n'];
+    setTerminalOutput([...outputs]);
 
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    const outputs: string[] = ['Compilation successful!\n'];
+    const currentCode = code; 
 
     for (let i = 0; i < challenge.test_cases.length; i++) {
       const testCase = challenge.test_cases[i];
       outputs.push(`Test Case ${i + 1}:`);
       outputs.push(`Input: ${testCase.input}`);
       outputs.push(`Expected: ${testCase.expected}`);
+      setTerminalOutput([...outputs]); 
 
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Send the code to Piston
+      const result = await executeCode(currentCode, testCase.input, language);
 
-      const passed = Math.random() > 0.3;
-      if (passed) {
-        outputs.push(`✓ Passed\n`);
+      if (result.success) {
+        const actualOutput = result.output ? result.output.trim() : "";
+        const expectedOutput = testCase.expected.trim();
+
+        if (actualOutput === expectedOutput) {
+          outputs.push(`✓ Passed\n`);
+        } else {
+          outputs.push(`✗ Failed: Expected '${expectedOutput}', but got '${actualOutput}'\n`);
+        }
       } else {
-        outputs.push(`✗ Failed: Got different output\n`);
+        outputs.push(`✗ Error:\n${result.error}\n`);
+        setTerminalOutput([...outputs]);
+        break; // Stop running test cases if the code crashes
       }
+      
       setTerminalOutput([...outputs]);
     }
 
@@ -146,10 +190,10 @@ export default function ChallengeWorkspace() {
                 <p className="text-gray-300 whitespace-pre-wrap">{challenge.description}</p>
               </div>
 
-              {challenge.examples.length > 0 && (
+              {challenge.examples && challenge.examples.length > 0 && (
                 <div>
                   <h3 className="text-lg font-semibold mb-2">Examples</h3>
-                  {challenge.examples.map((example, idx) => (
+                  {challenge.examples.map((example: any, idx: number) => (
                     <div key={idx} className="bg-gray-800 rounded-lg p-4 mb-3">
                       <div className="mb-2">
                         <span className="text-gray-400 font-medium">Input:</span>
@@ -170,11 +214,11 @@ export default function ChallengeWorkspace() {
                 </div>
               )}
 
-              {challenge.constraints.length > 0 && (
+              {challenge.constraints && challenge.constraints.length > 0 && (
                 <div>
                   <h3 className="text-lg font-semibold mb-2">Constraints</h3>
                   <ul className="list-disc list-inside space-y-1 text-gray-300">
-                    {challenge.constraints.map((constraint, idx) => (
+                    {challenge.constraints.map((constraint: string, idx: number) => (
                       <li key={idx}>{constraint}</li>
                     ))}
                   </ul>
