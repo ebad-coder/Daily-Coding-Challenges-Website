@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, Save } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import type { Example, TestCase } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
-import type { Example, TestCase } from '../lib/database.types';
 
 export default function AdminPanel() {
   // NEW: The two variables that control the lock screen
