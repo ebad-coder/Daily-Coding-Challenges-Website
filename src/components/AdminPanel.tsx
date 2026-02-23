@@ -1,17 +1,15 @@
-import { useState } from 'react';
-import { Plus, Trash2, Save } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import type { Example, TestCase } from '../lib/database.types';
-import { Plus, Trash2, Save } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Trash2, Save, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Example, TestCase } from '../lib/database.types';
 
 export default function AdminPanel() {
-  // NEW: The two variables that control the lock screen
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
 
-  // Your original state variables
   const [title, setTitle] = useState('');
   const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
   const [description, setDescription] = useState('');
@@ -23,6 +21,35 @@ export default function AdminPanel() {
   const [isDaily, setIsDaily] = useState(true);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (isMounted) {
+        setIsAuthenticated(Boolean(session));
+      }
+    };
+
+    loadSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (isMounted) {
+        setIsAuthenticated(Boolean(session));
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const addConstraint = () => setConstraints([...constraints, '']);
   const updateConstraint = (index: number, value: string) => {
@@ -54,33 +81,70 @@ export default function AdminPanel() {
     setTestCases(testCases.filter((_, i) => i !== index));
   };
 
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthLoading(true);
+
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: authPassword,
+      });
+
+      if (signInError) {
+        throw signInError;
+      }
+
+      setAuthPassword('');
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Failed to sign in');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setSuccess(false);
+    setError('');
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSuccess(false);
     setError('');
 
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error('You must be signed in as an admin to create challenges.');
+      }
+
       if (isDaily) {
-        await supabase
+        const { error: updateDailyError } = await supabase
           .from('challenges')
           .update({ is_daily: false })
           .eq('is_daily', true);
+
+        if (updateDailyError) throw updateDailyError;
       }
 
-      const { error: insertError } = await supabase
-        .from('challenges')
-        .insert({
-          title,
-          difficulty,
-          description,
-          constraints: constraints.filter(c => c.trim()),
-          examples: examples.filter(e => e.input || e.output),
-          starter_code_cpp: starterCodeCpp,
-          starter_code_python: starterCodePython,
-          test_cases: testCases.filter(t => t.input || t.expected),
-          is_daily: isDaily,
-          daily_date: isDaily ? new Date().toISOString().split('T')[0] : null,
-        });
+      const { error: insertError } = await supabase.from('challenges').insert({
+        title,
+        difficulty,
+        description,
+        constraints: constraints.filter((c) => c.trim()),
+        examples: examples.filter((example) => example.input || example.output),
+        starter_code_cpp: starterCodeCpp,
+        starter_code_python: starterCodePython,
+        test_cases: testCases.filter((testCase) => testCase.input || testCase.expected),
+        is_daily: isDaily,
+        daily_date: isDaily ? new Date().toISOString().split('T')[0] : null,
+      });
 
       if (insertError) throw insertError;
 
@@ -98,42 +162,73 @@ export default function AdminPanel() {
     }
   }
 
-  // NEW: The lock screen logic. If they haven't typed the right password, show this.
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-        <div className="bg-gray-800 p-8 rounded-xl border border-gray-700 max-w-md w-full">
-          <h2 className="text-2xl font-bold text-white mb-6 text-center">Admin Access</h2>
+        <form
+          onSubmit={handleSignIn}
+          className="bg-gray-800 p-8 rounded-xl border border-gray-700 max-w-md w-full"
+        >
+          <h2 className="text-2xl font-bold text-white mb-6 text-center">Admin Sign In</h2>
+
+          {authError && (
+            <div className="bg-red-900/50 border border-red-700 text-red-400 px-4 py-3 rounded-lg mb-4">
+              {authError}
+            </div>
+          )}
+
+          <label className="block text-sm text-gray-300 mb-2" htmlFor="adminEmail">
+            Admin email
+          </label>
           <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter admin password"
+            id="adminEmail"
+            type="email"
+            value={authEmail}
+            onChange={(e) => setAuthEmail(e.target.value)}
+            required
+            autoComplete="username"
             className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+
+          <label className="block text-sm text-gray-300 mb-2" htmlFor="adminPassword">
+            Password
+          </label>
+          <input
+            id="adminPassword"
+            type="password"
+            value={authPassword}
+            onChange={(e) => setAuthPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+
           <button
-            onClick={() => {
-              // THIS IS WHERE YOU CHANGE YOUR PASSWORD
-              if (password === 'ebadiscool123') { 
-                setIsAuthenticated(true);
-              } else {
-                alert('Incorrect password');
-              }
-            }}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors"
+            type="submit"
+            disabled={authLoading}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white px-4 py-3 rounded-lg font-medium transition-colors"
           >
-            Unlock Panel
+            {authLoading ? 'Signing in...' : 'Sign In'}
           </button>
-        </div>
+        </form>
       </div>
     );
   }
 
-  // If they ARE authenticated, show the normal form
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Admin Panel - Add Challenge</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold">Admin Panel - Add Challenge</h1>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="inline-flex items-center gap-2 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </button>
+        </div>
 
         {success && (
           <div className="bg-green-900/50 border border-green-700 text-green-400 px-4 py-3 rounded-lg mb-6">
