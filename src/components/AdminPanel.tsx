@@ -2,9 +2,6 @@ import { useState } from 'react';
 import { Plus, Trash2, Save } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Example, TestCase } from '../lib/database.types';
-import { Plus, Trash2, Save } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import type { Example, TestCase } from '../lib/database.types';
 
 export default function AdminPanel() {
   // NEW: The two variables that control the lock screen
@@ -61,10 +58,12 @@ export default function AdminPanel() {
 
     try {
       if (isDaily) {
-        await supabase
+        const { error: clearDailyError } = await supabase
           .from('challenges')
           .update({ is_daily: false })
           .eq('is_daily', true);
+
+        if (clearDailyError) throw clearDailyError;
       }
 
       const { error: insertError } = await supabase

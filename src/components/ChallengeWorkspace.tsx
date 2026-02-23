@@ -32,13 +32,17 @@ export default function ChallengeWorkspace() {
         .from('challenges')
         .select('*')
         .eq('is_daily', true)
-        .maybeSingle();
+        .order('daily_date', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(1);
 
       if (error) throw error;
 
-      if (data) {
-        setChallenge(data);
-        setCode(data.starter_code_cpp);
+      const latestDailyChallenge = data?.[0];
+
+      if (latestDailyChallenge) {
+        setChallenge(latestDailyChallenge);
+        setCode(latestDailyChallenge.starter_code_cpp);
       }
     } catch (error) {
       console.error('Error loading challenge:', error);
@@ -86,7 +90,7 @@ export default function ChallengeWorkspace() {
     setIsRunning(true);
     setShowTerminal(true);
     
-    let outputs = ['Sending code to Piston compiler...\n'];
+    const outputs = ['Sending code to Piston compiler...\n'];
     setTerminalOutput([...outputs]);
 
     const currentCode = code; 
@@ -193,7 +197,7 @@ export default function ChallengeWorkspace() {
               {challenge.examples && challenge.examples.length > 0 && (
                 <div>
                   <h3 className="text-lg font-semibold mb-2">Examples</h3>
-                  {challenge.examples.map((example: any, idx: number) => (
+                  {challenge.examples.map((example, idx: number) => (
                     <div key={idx} className="bg-gray-800 rounded-lg p-4 mb-3">
                       <div className="mb-2">
                         <span className="text-gray-400 font-medium">Input:</span>
