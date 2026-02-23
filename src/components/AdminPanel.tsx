@@ -3,7 +3,17 @@ import { Plus, Trash2, Save } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Example, TestCase } from '../lib/database.types';
 
+import { useState } from 'react';
+import { Plus, Trash2, Save } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import type { Example, TestCase } from '../lib/database.types';
+
 export default function AdminPanel() {
+  // NEW: The two variables that control the lock screen
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+
+  // Your original state variables
   const [title, setTitle] = useState('');
   const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
   const [description, setDescription] = useState('');
@@ -90,6 +100,38 @@ export default function AdminPanel() {
     }
   }
 
+  // NEW: The lock screen logic. If they haven't typed the right password, show this.
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="bg-gray-800 p-8 rounded-xl border border-gray-700 max-w-md w-full">
+          <h2 className="text-2xl font-bold text-white mb-6 text-center">Admin Access</h2>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter admin password"
+            className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={() => {
+              // THIS IS WHERE YOU CHANGE YOUR PASSWORD
+              if (password === 'ebadiscool123') { 
+                setIsAuthenticated(true);
+              } else {
+                alert('Incorrect password');
+              }
+            }}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors"
+          >
+            Unlock Panel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // If they ARE authenticated, show the normal form
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <div className="max-w-4xl mx-auto">
